@@ -6,13 +6,28 @@ from PyQt5.QtGui import QPixmap
 import cv2
 import qimage2ndarray
 import time
+import argparse
+from predict import vgg2pre,res2pre,se_resnet2pre,densenet2pre,predict
 
 
-#sys.path.append("../")
+
 
 #open_dnn
 model_bin = "res10_300x300_ssd_iter_140000_fp16.caffemodel"
 config_text = "deploy.prototxt"
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--path', type=str, default='./', help='test video path.')
+    parser.add_argument('--video', type=str, default=None,
+                        help='test video path')
+    return parser.parse_args()
+
+
+args = parse_args()
+
+
+
 
 # load caffe model
 net2 = cv2.dnn.readNetFromCaffe(config_text, model_bin)
@@ -21,7 +36,7 @@ net2 = cv2.dnn.readNetFromCaffe(config_text, model_bin)
 net2.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
 net2.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
-from predict import vgg2pre,res2pre,se_resnet2pre,densenet2pre,predict
+
 #face_cascade = cv2.CascadeClassifier('opencv-master/data/haarcascades/haarcascade_frontalface_default.xml')
 #eye_cascade = cv2.CascadeClassifier('../opencv-master/data/haarcascades/haarcascade_eye.xml')
 vgg=vgg2pre()
@@ -81,10 +96,12 @@ class CamShow(QMainWindow,Ui_MainWindow):
         self.ContrastSpB.setEnabled(False)
     def PrepCamera(self):
         try:
-            self.camera=cv2.VideoCapture(0)
-#            self.camera.set(3, 1080)
-#            self.camera.set(4, 640)
-            
+            global args
+            if args.video :
+                self.camera=cv2.VideoCapture(args.path+args.video)
+            else:
+                self.camera=cv2.VideoCapture(0)
+                
             self.MsgTE.clear()
             self.MsgTE.append('Oboard camera connected.')
             self.MsgTE.setPlainText()
@@ -93,7 +110,7 @@ class CamShow(QMainWindow,Ui_MainWindow):
             self.MsgTE.append(str(e))
     def PrepParameters(self):
         self.RecordFlag=0
-        self.RecordPath='D:/Python/PyQt/'
+        self.RecordPath=args.video
         self.FilePathLE.setText(self.RecordPath)
         self.Image_num=0
         self.R=1
@@ -251,10 +268,10 @@ class CamShow(QMainWindow,Ui_MainWindow):
         blobImage = cv2.dnn.blobFromImage(self.Image, 1.0, (300, 300), (104.0, 177.0, 123.0), False, False);
         net2.setInput(blobImage)
         self.Face  = net2.forward()
-        i=0
+        
         for detection in self.Face[0,0,:,:]:
             score = float(detection[2])
-            i+=1
+           
 #            objIndex = int(detection[1])
             if score > 0.5:
                 left = detection[3]*w
@@ -266,7 +283,11 @@ class CamShow(QMainWindow,Ui_MainWindow):
                 
                 if self.StopBt.text()=='继续':
                     roi = self.Image[int(top)-10:int(bottom)+10,int(left)-10:int(right)+10]
-                    cv2.imwrite(str(i)+".jpg", roi)
+                    
+                    if roi.shape[0]<44 or roi.shape[1]<44:
+                        print(roi.shape)
+                        continue
+                  #  cv2.imwrite(str(i)+".jpg", roi)
                     net_type=self.RecordBt.text()
 
                     if(net_type=="VGG19"):
@@ -278,7 +299,7 @@ class CamShow(QMainWindow,Ui_MainWindow):
                     elif(net_type=="SeNet18"):
                         pred=predict(roi,se_resnet.net)
             
-                    cv2.putText(self.Image, '%s'%pred, (int(left), int(top)-20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (55,255,155), 2)
+                    cv2.putText(self.Image, '%s'%pred, (int(left), int(top)-20), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (55,255,155), 2)
 
 #                self.MsgTE.clear()
                     self.MsgTE.setPlainText(pred)
@@ -317,35 +338,7 @@ class CamShow(QMainWindow,Ui_MainWindow):
 #            self.RecordBt.setText('录像')
             self.StopBt.setText('预测')
 
-#        if tag=='保存':
-#            try:
-#                image_name=self.RecordPath+'image'+time.strftime('%Y%m%d%H%M%S',time.localtime(time.time()))+'.jpg'
-#                print(image_name)
-#                cv2.imwrite(image_name, self.Image)
-#                self.MsgTE.clear()
-#                self.MsgTE.setPlainText('Image saved.')
-#            except Exception as e:
-#                self.MsgTE.clear()
-#                self.MsgTE.setPlainText(str(e))
-#        elif tag=='录像':
-#            self.RecordBt.setText('停止')
-#
-#            video_name = self.RecordPath + 'video' + time.strftime('%Y%m%d%H%M%S',time.localtime(time.time())) + '.avi'
-#            fps = self.FmRateLCD.value()
-#            size = (self.Image.shape[1],self.Image.shape[0])
-#            fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-#            self.video_writer = cv2.VideoWriter(video_name, fourcc,self.camera.get(5), size)
-#            self.RecordFlag=1
-#            self.MsgTE.setPlainText('Video recording...')
-#            self.StopBt.setEnabled(False)
-#            self.ExitBt.setEnabled(False)
-#        elif tag == '停止':
-#            self.RecordBt.setText('录像')
-#            self.video_writer.release()
-#            self.RecordFlag = 0
-#            self.MsgTE.setPlainText('Video saved.')
-#            self.StopBt.setEnabled(True)
-#            self.ExitBt.setEnabled(True)
+
     def ExitApp(self):
         self.Timer.stop()
         self.camera.release()
